@@ -48,7 +48,7 @@ if __name__ == "__main__":
     submarine = Submarine()
     assert submarine.move(test_input, False) == 900, "test part 2"
     submarine = Submarine()
-    with open("input", "r") as fh:
+    with open("rory_input", "r") as fh:
         print(submarine.move(fh.read(), True))
         print(submarine.move(fh.read(), False))
     # part02
