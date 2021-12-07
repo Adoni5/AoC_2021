@@ -11,7 +11,7 @@ for position in range(max(inputty+1)):
     new_costs = abs(inputty - position)
     new_cost_p1 = sum(new_costs)
     cost = (new_cost_p1, position) if new_cost_p1 < cost[0] else cost
-    new_cost_p2 = sum(map(lambda x: sum(range(x+1)), new_costs))
+    new_cost_p2 = sum((new_costs * (new_costs+1)) // 2)
     cost_p2 = (new_cost_p2, position) if new_cost_p2 < cost_p2[0] else cost_p2
     # new_cost_p2 = np.sum()
 
