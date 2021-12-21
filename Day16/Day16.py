@@ -1,6 +1,7 @@
 import re
+from functools import reduce
 from math import prod
-from operator import gt, eq, lt
+from operator import gt, eq, lt, mul
 
 translation = """0 = 0000
 1 = 0001
@@ -23,11 +24,24 @@ t = {k: v for k, v in pat.findall(translation)}
 
 
 def packet_version_tid(packet):
-    version = int(packet[:3], 2)
-    type_id = int(packet[3:6], 2)
-    return version, type_id, packet[6:]
+    version = packet.read_int(3)
+    type_id = packet.read_int(3)
+    return version, type_id
 
-ans = {}
+
+class Buffer:
+    def __init__(self, bits):
+        self.arr = bits
+        self.ptr = 0
+        self.it = iter(self.arr)
+
+    def read_int(self, n):
+        return int(self.read_str(n), 2)
+
+    def read_str(self, n):
+        self.ptr += n
+        return "".join(next(self.it) for _ in range(n))
+
 
 def parse_literal_packet(packet):
     """
@@ -44,60 +58,66 @@ def parse_literal_packet(packet):
     return int(bit_group_literal, 2), packet[i+5:], i+5
 
 
-instructions = {0: sum,
-                1: prod,
-                2: min,
-                3: max,
-                5: gt,
-                6: lt,
-                7: lambda x, y: x == y}
+def parse_packet(packet):
+    version, t_id = packet_version_tid(packet)
+
+    if t_id == 4:
+        value = ""
+        while packet.read_int(1) != 0:
+            value += packet.read_str(4)
+        value += packet.read_str(4)
+        return version, t_id, int(value, 2)
+
+    length_type = packet.read_int(1)
+    if length_type == 0:
+        target = packet.read_int(15) + packet.ptr  # order matters!
+        subs = []
+        while packet.ptr < target:
+            subs.append(parse_packet(packet))
+        return version, t_id, subs
+    elif length_type == 1:
+        subpackets = packet.read_int(11)
+        subs = []
+        for _ in range(subpackets):
+            subs.append(parse_packet(packet))
+        return version, t_id, subs
 
 
-test1 = "A0016C880162017C3686B18A3D4780"
-# with open("input") as fh:
-#     test1 = fh.read().strip()
-sans = "".join(t[char] for char in test1)
-packet = "".join(t[char] for char in test1)
+def version_sum(packet):
+    version, op, subpackets = packet
+    if op == 4:
+        return version
+    else:
+        return version + sum([version_sum(p) for p in subpackets])
 
 
-def parse_packet(packet, county=None, type_1=False):
-    lits = []
-    version_sum = 0
-    booly = packet.count("1") if not county else county
-    opy = []
-    while booly:
-        version, type_id, packet = packet_version_tid(packet)
-        print(f"type id is {type_id}")
-        version_sum += version
-        if type_id == 4:
-            lit_value, packet, removed = parse_literal_packet(packet)
-            lits.append(lit_value)
-        else:
-            opy.append(instructions[type_id])
-            if not int(packet[0]):
-                print("op type 0")
-                sub_packets_length = int(packet[1:16], 2)
-                packet = packet[16:]
-            else:
-                print("op type 1")
-                sub_packet_count = int(packet[1: 12], 2)
-                # print(sub_packet_count)
-                packet, vs, ls, opr = parse_packet(packet[12:], sub_packet_count)
-
-                version_sum += vs
-                lits.extend([ls])
-                opy.extend(opr)
-        if county and type_1:
-            booly -= 1
-        elif county and not type_1:
-            booly = county
-        else:
-            booly = packet.count("1")
-    return packet, version_sum, lits, opy
+operators = [
+    sum,
+    lambda s: reduce(mul, s),
+    min,
+    max,
+    lambda s: s,
+    lambda s: int(gt(*s)),
+    lambda s: int(lt(*s)),
+    lambda s: int(eq(*s)),
+]
 
 
-packet, version_sum, lits, opr = parse_packet(packet)
-# a = [fun(vals) for vals, fun in list(zip(lits, opr[1:]))]
-# if len(opr !)
+def eval_packet(packet):
+    version, op, subpackets = packet
+    if isinstance(subpackets, list):
+        subpackets = list(map(eval_packet, subpackets))
+    return operators[op](subpackets)
+
+with open("input") as fh:
+    bits = fh.read().strip()
+
+bits = "".join(t[char] for char in bits)
+packets = parse_packet(Buffer(bits))
+print("Part 1:", version_sum(packets))
+print("Part 2:", eval_packet(packets))
+
+
+
 
 
